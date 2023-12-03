@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 
 enum ParsedChar {
     Digit(usize),
-    Symbol,
+    Symbol(char),
     None,
 }
 
@@ -23,7 +23,7 @@ fn parse_char(c: char) -> ParsedChar {
         '7' => ParsedChar::Digit(7),
         '8' => ParsedChar::Digit(8),
         '9' => ParsedChar::Digit(9),
-        _ => ParsedChar::Symbol,
+        _ => ParsedChar::Symbol(c),
     }
 }
 
@@ -130,56 +130,62 @@ fn neighbours(i: usize, leni: usize, j: usize, lenj: usize) -> Vec<(usize, usize
     n
 }
 
-fn partsum(schema: Vec<Vec<ParsedChar>>) -> usize {
+fn walk_part(
+    row: &Vec<ParsedChar>,
+    visited: &mut HashSet<(usize, usize)>,
+    n: usize, // row index
+    m: usize, // column index
+    d: usize, // current digit
+) -> usize {
+    visited.insert((n, m));
+    let mut deq: VecDeque<usize> = VecDeque::from([d]);
+    let mut pos = m;
+    // walk left
+    loop {
+        if pos == 0 {
+            break;
+        } else {
+            pos -= 1;
+        }
+        if let ParsedChar::Digit(d) = row[pos] {
+            deq.push_front(d);
+            visited.insert((n, pos));
+        } else {
+            break;
+        }
+    }
+
+    // Walk right
+    pos = m + 1;
+    while pos <= row.len() - 1 {
+        if let ParsedChar::Digit(d) = row[pos] {
+            deq.push_back(d);
+            visited.insert((n, pos));
+            pos += 1;
+        } else {
+            break;
+        }
+    }
+
+    let mut part_number: usize = 0;
+    for d in deq.iter() {
+        part_number *= 10;
+        part_number += d;
+    }
+    part_number
+}
+
+fn partsum(schema: &Vec<Vec<ParsedChar>>) -> usize {
     let mut sum: usize = 0;
     let mut visited: HashSet<(usize, usize)> = HashSet::new();
     for (i, line) in schema.iter().enumerate() {
         for (j, char) in line.iter().enumerate() {
-            if let ParsedChar::Symbol = char {
+            if let ParsedChar::Symbol(_) = char {
                 // Track visited neighbours
                 for (n, m) in neighbours(i, schema.len(), j, line.len()) {
                     if let ParsedChar::Digit(d) = schema[n][m] {
                         if !visited.contains(&(n, m)) {
-                            visited.insert((n, m));
-                            let part_number = {
-                                let mut deq: VecDeque<usize> = VecDeque::from([d]);
-                                let mut pos = m;
-                                // walk left
-                                loop {
-                                    if pos == 0 {
-                                        break;
-                                    } else {
-                                        pos -= 1;
-                                    }
-                                    if let ParsedChar::Digit(d) = schema[n][pos] {
-                                        deq.push_front(d);
-                                        visited.insert((n, pos));
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                // Walk right
-                                pos = m + 1;
-                                while pos <= line.len() - 1 {
-                                    if let ParsedChar::Digit(d) = schema[n][pos] {
-                                        deq.push_back(d);
-                                        visited.insert((n, pos));
-                                        pos += 1;
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                let mut part_number: usize = 0;
-                                for d in deq.iter() {
-                                    part_number *= 10;
-                                    part_number += d;
-                                }
-                                part_number
-                            };
-
-                            sum += part_number;
+                            sum += walk_part(&schema[n], &mut visited, n, m, d);
                         }
                     }
                 }
@@ -189,9 +195,40 @@ fn partsum(schema: Vec<Vec<ParsedChar>>) -> usize {
 
     sum
 }
+
+fn gearsum(schema: &Vec<Vec<ParsedChar>>) -> usize {
+    let mut sum: usize = 0;
+    let mut visited: HashSet<(usize, usize)> = HashSet::new();
+    for (i, line) in schema.iter().enumerate() {
+        for (j, char) in line.iter().enumerate() {
+            if let ParsedChar::Symbol('*') = char {
+                let mut parts: Vec<usize> = Vec::new();
+                // Track visited neighbours
+                for (n, m) in neighbours(i, schema.len(), j, line.len()) {
+                    if let ParsedChar::Digit(d) = schema[n][m] {
+                        if !visited.contains(&(n, m)) {
+                            parts.push(walk_part(&schema[n], &mut visited, n, m, d));
+                        }
+                    }
+                }
+
+                // This is only a gear if it has exactly two parts
+                if parts.len() == 2 {
+                    sum += parts[0] * parts[1];
+                }
+            }
+        }
+    }
+
+    sum
+}
+
 fn main() {
     let schema: Vec<Vec<ParsedChar>> = parse_game("input.txt").unwrap();
 
     // 556057
-    println!("{}", partsum(schema))
+    println!("part sum: {}", partsum(&schema));
+
+    //
+    println!("sum of gearratios: {}", gearsum(&schema));
 }
